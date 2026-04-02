@@ -76,5 +76,17 @@ func Shortcuts() []common.Shortcut {
 		BaseDashboardBlockCreate,
 		BaseDashboardBlockUpdate,
 		BaseDashboardBlockDelete,
+		ProjectCreate,
+		ProjectGet,
+		ProjectKVSet,
+		ProjectKVGet,
+		ProjectKVList,
+		ProjectKVDelete,
+		ProjectMemberAdd,
+		ProjectMemberList,
+		ProjectTaskAdd,
+		ProjectTaskNext,
+		ProjectTaskList,
+		ProjectTaskUpdate,
 	}
 }
