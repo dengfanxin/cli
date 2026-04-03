@@ -99,9 +99,14 @@ func executeProjectTaskAdd(runtime *common.RuntimeContext) error {
 		if err := json.Unmarshal([]byte(extraRaw), &extraFields); err != nil {
 			return fmt.Errorf("parse --extra JSON: %w", err)
 		}
+		// List existing fields to avoid creating duplicates.
+		existingFields, err := listExistingFieldNames(runtime, baseToken, tasksTableID)
+		if err != nil {
+			existingFields = make(map[string]bool)
+		}
 		created := 0
 		for key := range extraFields {
-			if knownTaskFields[key] {
+			if knownTaskFields[key] || existingFields[key] {
 				continue
 			}
 			_, err := baseV3Call(runtime, "POST", baseV3Path("bases", baseToken, "tables", tasksTableID, "fields"), nil, map[string]interface{}{
@@ -109,7 +114,11 @@ func executeProjectTaskAdd(runtime *common.RuntimeContext) error {
 				"name": key,
 			})
 			if err != nil {
-				return fmt.Errorf("create field %q: %w", key, err)
+				// Ignore "field already exists" errors (code 800010205).
+				if !strings.Contains(err.Error(), "800010205") {
+					return fmt.Errorf("create field %q: %w", key, err)
+				}
+				continue
 			}
 			created++
 			if created > 0 {
@@ -217,10 +226,8 @@ func executeProjectTaskNext(runtime *common.RuntimeContext) error {
 	// Update status to in_progress.
 	recordID := recordIDFromMap(best)
 	updateBody := map[string]interface{}{
-		"fields": map[string]interface{}{
-			fieldTaskStatus:    "in_progress",
-			fieldTaskUpdatedAt: nowTimestamp(),
-		},
+		fieldTaskStatus:    "in_progress",
+		fieldTaskUpdatedAt: nowTimestamp(),
 	}
 	_, err = baseV3Call(runtime, "PATCH", baseV3Path("bases", baseToken, "tables", tasksTableID, "records", recordID), nil, updateBody)
 	if err != nil {

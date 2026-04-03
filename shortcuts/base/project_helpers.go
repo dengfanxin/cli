@@ -306,3 +306,29 @@ func nowTimestamp() string {
 func isWellKnownTable(name string) bool {
 	return wellKnownProjectTables[name]
 }
+
+// listExistingFieldNames returns a set of field names that already exist in the table.
+func listExistingFieldNames(runtime *common.RuntimeContext, baseToken, tableIDValue string) (map[string]bool, error) {
+	data, err := baseV3Call(runtime, "GET", baseV3Path("bases", baseToken, "tables", tableIDValue, "fields"), nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	names := make(map[string]bool)
+	// data may be the fields array directly (when "data" unwrapping yields []interface{})
+	// or a map with "fields" key containing the array.
+	var fieldList []interface{}
+	if fl, ok := data["fields"].([]interface{}); ok {
+		fieldList = fl
+	}
+	for _, f := range fieldList {
+		switch v := f.(type) {
+		case map[string]interface{}:
+			if n, ok := v["name"].(string); ok {
+				names[n] = true
+			}
+		case string:
+			names[v] = true
+		}
+	}
+	return names, nil
+}
