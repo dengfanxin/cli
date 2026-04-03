@@ -128,6 +128,7 @@ func TestShortcutsCatalog(t *testing.T) {
 		"+project-kv-set", "+project-kv-get", "+project-kv-list", "+project-kv-delete",
 		"+project-member-add", "+project-member-list",
 		"+project-task-add", "+project-task-next", "+project-task-list", "+project-task-update",
+		"+project-resource-add", "+project-resource-list", "+project-resource-remove",
 	}
 	if len(shortcuts) != len(want) {
 		t.Fatalf("len(shortcuts)=%d want=%d", len(shortcuts), len(want))

@@ -5,11 +5,27 @@ package base
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/larksuite/cli/shortcuts/common"
 )
+
+// knownTaskFields lists the standard task field names used by ensureProjectTable.
+var knownTaskFields = map[string]bool{
+	fieldTaskTitle:           true,
+	fieldTaskDescription:     true,
+	fieldTaskStatus:          true,
+	fieldTaskPriority:        true,
+	fieldTaskAssignee:        true,
+	fieldTaskSubtasks:        true,
+	fieldTaskCreatedAt:       true,
+	fieldTaskUpdatedAt:       true,
+	fieldTaskSubtaskProgress: true,
+	fieldTaskSummary:         true,
+}
 
 // Priority order for task sorting (lower index = higher priority).
 var taskPriorityOrder = map[string]int{
@@ -33,6 +49,7 @@ var ProjectTaskAdd = common.Shortcut{
 		{Name: "description", Desc: "task description"},
 		{Name: "priority", Desc: "task priority (0=highest, or high/medium/low)", Default: "medium"},
 		{Name: "assignee", Desc: "task assignee"},
+		{Name: "extra", Desc: `extra fields JSON object, e.g. '{"type":"脚本","skill":"Agent-Script"}'`},
 	},
 	DryRun: dryRunProjectTaskAdd,
 	Execute: func(ctx context.Context, runtime *common.RuntimeContext) error {
@@ -67,10 +84,38 @@ func executeProjectTaskAdd(runtime *common.RuntimeContext) error {
 		priority = "medium"
 	}
 	assignee := strings.TrimSpace(runtime.Str("assignee"))
+	extraRaw := strings.TrimSpace(runtime.Str("extra"))
 
 	tasksTableID, err := ensureProjectTable(runtime, baseToken, projectTasksTable)
 	if err != nil {
 		return err
+	}
+
+	// If --extra is provided, parse it and create any new fields that are not
+	// already well-known task fields. Base v3 API requires fields to exist
+	// before writing records.
+	var extraFields map[string]interface{}
+	if extraRaw != "" {
+		if err := json.Unmarshal([]byte(extraRaw), &extraFields); err != nil {
+			return fmt.Errorf("parse --extra JSON: %w", err)
+		}
+		created := 0
+		for key := range extraFields {
+			if knownTaskFields[key] {
+				continue
+			}
+			_, err := baseV3Call(runtime, "POST", baseV3Path("bases", baseToken, "tables", tasksTableID, "fields"), nil, map[string]interface{}{
+				"type": "text",
+				"name": key,
+			})
+			if err != nil {
+				return fmt.Errorf("create field %q: %w", key, err)
+			}
+			created++
+			if created > 0 {
+				time.Sleep(500 * time.Millisecond)
+			}
+		}
 	}
 
 	now := nowTimestamp()
@@ -86,6 +131,10 @@ func executeProjectTaskAdd(runtime *common.RuntimeContext) error {
 	}
 	if assignee != "" {
 		fields[fieldTaskAssignee] = assignee
+	}
+	// Merge extra fields into the record.
+	for k, v := range extraFields {
+		fields[k] = v
 	}
 
 	data, err := baseV3Call(runtime, "POST", baseV3Path("bases", baseToken, "tables", tasksTableID, "records"), nil, fields)
@@ -108,6 +157,7 @@ var ProjectTaskNext = common.Shortcut{
 	AuthTypes:   authTypes(),
 	Flags: []common.Flag{
 		projectFlag(),
+		{Name: "filter", Type: "string_array", Desc: "filter by field value, e.g. type=脚本"},
 	},
 	DryRun: dryRunProjectTaskNext,
 	Execute: func(ctx context.Context, runtime *common.RuntimeContext) error {
@@ -131,6 +181,7 @@ func dryRunProjectTaskNext(_ context.Context, runtime *common.RuntimeContext) *c
 
 func executeProjectTaskNext(runtime *common.RuntimeContext) error {
 	baseToken := projectBaseToken(runtime)
+	filters := runtime.StrArray("filter")
 
 	tasksTableID, err := findProjectTableID(runtime, baseToken, projectTasksTable)
 	if err != nil {
@@ -142,6 +193,9 @@ func executeProjectTaskNext(runtime *common.RuntimeContext) error {
 	if err != nil {
 		return err
 	}
+
+	// Apply --filter before priority sorting.
+	records = applyRecordFilters(records, filters)
 
 	if len(records) == 0 {
 		runtime.Out(map[string]interface{}{"message": "no pending tasks"}, nil)
@@ -223,6 +277,7 @@ var ProjectTaskList = common.Shortcut{
 	Flags: []common.Flag{
 		projectFlag(),
 		{Name: "status", Desc: "filter by status", Enum: []string{"pending", "in_progress", "done", "blocked"}},
+		{Name: "filter", Type: "string_array", Desc: "filter by field value, e.g. type=脚本"},
 	},
 	DryRun: dryRunProjectTaskList,
 	Execute: func(ctx context.Context, runtime *common.RuntimeContext) error {
@@ -251,6 +306,7 @@ func dryRunProjectTaskList(_ context.Context, runtime *common.RuntimeContext) *c
 func executeProjectTaskList(runtime *common.RuntimeContext) error {
 	baseToken := projectBaseToken(runtime)
 	status := strings.TrimSpace(runtime.Str("status"))
+	filters := runtime.StrArray("filter")
 
 	tasksTableID, err := findProjectTableID(runtime, baseToken, projectTasksTable)
 	if err != nil {
@@ -266,6 +322,9 @@ func executeProjectTaskList(runtime *common.RuntimeContext) error {
 	if err != nil {
 		return err
 	}
+
+	// Apply --filter after status filter, before output.
+	records = applyRecordFilters(records, filters)
 
 	items := make([]interface{}, 0, len(records))
 	for _, r := range records {
@@ -362,4 +421,32 @@ func executeProjectTaskUpdate(runtime *common.RuntimeContext) error {
 
 	runtime.Out(map[string]interface{}{"record": data, "updated": true, "task_id": taskID}, nil)
 	return nil
+}
+
+// applyRecordFilters filters records by "key=value" expressions.
+// Each filter string is split on the first "=" to get the field name and value.
+// Only records matching ALL filters are retained.
+func applyRecordFilters(records []map[string]interface{}, filters []string) []map[string]interface{} {
+	if len(filters) == 0 {
+		return records
+	}
+	var result []map[string]interface{}
+	for _, r := range records {
+		match := true
+		for _, f := range filters {
+			parts := strings.SplitN(f, "=", 2)
+			if len(parts) != 2 {
+				continue
+			}
+			key, val := parts[0], parts[1]
+			if recordFieldValue(r, key) != val {
+				match = false
+				break
+			}
+		}
+		if match {
+			result = append(result, r)
+		}
+	}
+	return result
 }

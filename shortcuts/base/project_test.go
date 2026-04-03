@@ -898,3 +898,407 @@ func TestDryRunProjectMemberAdd(t *testing.T) {
 		"records",
 	)
 }
+
+// ---------------------------------------------------------------------------
+// Resource: Add
+// ---------------------------------------------------------------------------
+
+func TestProjectResourceAddExecute(t *testing.T) {
+	factory, stdout, reg := newExecuteFactory(t)
+	registerTokenStub(reg)
+
+	// Table list (_resources does NOT exist)
+	reg.Register(&httpmock.Stub{
+		Method: "GET",
+		URL:    "/open-apis/base/v3/bases/app_proj1/tables",
+		Body: map[string]interface{}{
+			"code": 0,
+			"data": map[string]interface{}{
+				"tables": []interface{}{
+					map[string]interface{}{"id": "tbl_info", "name": "_project_info"},
+				},
+				"total": 1,
+			},
+		},
+	})
+
+	// Create _resources table
+	reg.Register(&httpmock.Stub{
+		Method: "POST",
+		URL:    "/open-apis/base/v3/bases/app_proj1/tables",
+		Body: map[string]interface{}{
+			"code": 0,
+			"data": map[string]interface{}{"id": "tbl_res", "name": "_resources"},
+		},
+	})
+
+	// Create fields: name, type, url, description
+	reg.Register(&httpmock.Stub{
+		Method: "POST",
+		URL:    "/open-apis/base/v3/bases/app_proj1/tables/tbl_res/fields",
+		Body:   map[string]interface{}{"code": 0, "data": map[string]interface{}{"id": "fld_name", "name": "name", "type": "text"}},
+	})
+	reg.Register(&httpmock.Stub{
+		Method: "POST",
+		URL:    "/open-apis/base/v3/bases/app_proj1/tables/tbl_res/fields",
+		Body:   map[string]interface{}{"code": 0, "data": map[string]interface{}{"id": "fld_type", "name": "type", "type": "text"}},
+	})
+	reg.Register(&httpmock.Stub{
+		Method: "POST",
+		URL:    "/open-apis/base/v3/bases/app_proj1/tables/tbl_res/fields",
+		Body:   map[string]interface{}{"code": 0, "data": map[string]interface{}{"id": "fld_url", "name": "url", "type": "text"}},
+	})
+	reg.Register(&httpmock.Stub{
+		Method: "POST",
+		URL:    "/open-apis/base/v3/bases/app_proj1/tables/tbl_res/fields",
+		Body:   map[string]interface{}{"code": 0, "data": map[string]interface{}{"id": "fld_desc", "name": "description", "type": "text"}},
+	})
+
+	// Create resource record
+	reg.Register(&httpmock.Stub{
+		Method: "POST",
+		URL:    "/open-apis/base/v3/bases/app_proj1/tables/tbl_res/records",
+		Body: map[string]interface{}{
+			"code": 0,
+			"data": map[string]interface{}{
+				"record_id": "rec_res1",
+				"fields":    map[string]interface{}{"name": "Design Doc", "type": "doc", "url": "https://example.com/doc"},
+			},
+		},
+	})
+
+	args := []string{"+project-resource-add", "--base-token", "app_proj1", "--name", "Design Doc", "--type", "doc", "--url", "https://example.com/doc"}
+	if err := runShortcut(t, ProjectResourceAdd, args, factory, stdout); err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	got := stdout.String()
+	if !strings.Contains(got, `"Design Doc"`) {
+		t.Fatalf("missing resource name, stdout=%s", got)
+	}
+	if !strings.Contains(got, `"created": true`) {
+		t.Fatalf("missing created flag, stdout=%s", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Resource: List
+// ---------------------------------------------------------------------------
+
+func TestProjectResourceListExecute(t *testing.T) {
+	factory, stdout, reg := newExecuteFactory(t)
+	registerTokenStub(reg)
+
+	// Table list (_resources exists)
+	reg.Register(&httpmock.Stub{
+		Method: "GET",
+		URL:    "/open-apis/base/v3/bases/app_proj1/tables",
+		Body: map[string]interface{}{
+			"code": 0,
+			"data": map[string]interface{}{
+				"tables": []interface{}{
+					map[string]interface{}{"id": "tbl_res", "name": "_resources"},
+				},
+				"total": 1,
+			},
+		},
+	})
+
+	// List records (compact format) with 2 resources
+	reg.Register(&httpmock.Stub{
+		Method: "GET",
+		URL:    "/open-apis/base/v3/bases/app_proj1/tables/tbl_res/records",
+		Body: map[string]interface{}{
+			"code": 0,
+			"data": map[string]interface{}{
+				"data": []interface{}{
+					[]interface{}{"Design Doc", "doc", "https://example.com/doc", "Main design document"},
+					[]interface{}{"Code Repo", "repo", "https://github.com/example/repo", "Source code"},
+				},
+				"fields":         []interface{}{"name", "type", "url", "description"},
+				"record_id_list": []interface{}{"rec_r1", "rec_r2"},
+				"has_more":       false,
+			},
+		},
+	})
+
+	args := []string{"+project-resource-list", "--base-token", "app_proj1"}
+	if err := runShortcut(t, ProjectResourceList, args, factory, stdout); err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	got := stdout.String()
+	if !strings.Contains(got, `"Design Doc"`) {
+		t.Fatalf("missing first resource, stdout=%s", got)
+	}
+	if !strings.Contains(got, `"Code Repo"`) {
+		t.Fatalf("missing second resource, stdout=%s", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Resource: Remove
+// ---------------------------------------------------------------------------
+
+func TestProjectResourceRemoveExecute(t *testing.T) {
+	factory, stdout, reg := newExecuteFactory(t)
+	registerTokenStub(reg)
+
+	// Table list
+	reg.Register(&httpmock.Stub{
+		Method: "GET",
+		URL:    "/open-apis/base/v3/bases/app_proj1/tables",
+		Body: map[string]interface{}{
+			"code": 0,
+			"data": map[string]interface{}{
+				"tables": []interface{}{
+					map[string]interface{}{"id": "tbl_res", "name": "_resources"},
+				},
+				"total": 1,
+			},
+		},
+	})
+
+	// List records to find by name
+	reg.Register(&httpmock.Stub{
+		Method: "GET",
+		URL:    "/open-apis/base/v3/bases/app_proj1/tables/tbl_res/records",
+		Body: map[string]interface{}{
+			"code": 0,
+			"data": map[string]interface{}{
+				"data":           []interface{}{[]interface{}{"Design Doc", "doc", "https://example.com/doc", ""}},
+				"fields":         []interface{}{"name", "type", "url", "description"},
+				"record_id_list": []interface{}{"rec_r_del"},
+				"has_more":       false,
+			},
+		},
+	})
+
+	// Delete record
+	reg.Register(&httpmock.Stub{
+		Method: "DELETE",
+		URL:    "/open-apis/base/v3/bases/app_proj1/tables/tbl_res/records/rec_r_del",
+		Body:   map[string]interface{}{"code": 0, "data": map[string]interface{}{}},
+	})
+
+	args := []string{"+project-resource-remove", "--base-token", "app_proj1", "--name", "Design Doc"}
+	if err := runShortcut(t, ProjectResourceRemove, args, factory, stdout); err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	got := stdout.String()
+	if !strings.Contains(got, `"deleted": true`) {
+		t.Fatalf("missing deleted flag, stdout=%s", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Dry-run: Resource Add
+// ---------------------------------------------------------------------------
+
+func TestDryRunProjectResourceAdd(t *testing.T) {
+	ctx := context.Background()
+	rt := newBaseTestRuntime(
+		map[string]string{"base-token": "app_proj1", "name": "Design Doc", "type": "doc", "url": "https://example.com/doc"},
+		nil, nil,
+	)
+	assertDryRunContains(t,
+		ProjectResourceAdd.DryRun(ctx, rt),
+		"/open-apis/base/v3/bases/app_proj1/tables",
+		"records",
+	)
+}
+
+// ---------------------------------------------------------------------------
+// Task: Add with --extra
+// ---------------------------------------------------------------------------
+
+func TestProjectTaskAddWithExtra(t *testing.T) {
+	factory, stdout, reg := newExecuteFactory(t)
+	registerTokenStub(reg)
+
+	// Table list (tasks table exists)
+	reg.Register(&httpmock.Stub{
+		Method: "GET",
+		URL:    "/open-apis/base/v3/bases/app_proj1/tables",
+		Body: map[string]interface{}{
+			"code": 0,
+			"data": map[string]interface{}{
+				"tables": []interface{}{
+					map[string]interface{}{"id": "tbl_tasks", "name": "_tasks"},
+				},
+				"total": 1,
+			},
+		},
+	})
+
+	// Create field "type" (not a known task field)
+	reg.Register(&httpmock.Stub{
+		Method: "POST",
+		URL:    "/open-apis/base/v3/bases/app_proj1/tables/tbl_tasks/fields",
+		Body:   map[string]interface{}{"code": 0, "data": map[string]interface{}{"id": "fld_type", "name": "type", "type": "text"}},
+	})
+
+	// Create field "skill" (not a known task field)
+	reg.Register(&httpmock.Stub{
+		Method: "POST",
+		URL:    "/open-apis/base/v3/bases/app_proj1/tables/tbl_tasks/fields",
+		Body:   map[string]interface{}{"code": 0, "data": map[string]interface{}{"id": "fld_skill", "name": "skill", "type": "text"}},
+	})
+
+	// Create task record
+	reg.Register(&httpmock.Stub{
+		Method: "POST",
+		URL:    "/open-apis/base/v3/bases/app_proj1/tables/tbl_tasks/records",
+		Body: map[string]interface{}{
+			"code": 0,
+			"data": map[string]interface{}{
+				"record_id": "rec_task_extra",
+				"fields": map[string]interface{}{
+					"title":  "Script Task",
+					"status": "pending",
+					"type":   "\u811a\u672c",
+					"skill":  "Agent-Script",
+				},
+			},
+		},
+	})
+
+	args := []string{"+project-task-add", "--base-token", "app_proj1", "--title", "Script Task", "--extra", `{"type":"脚本","skill":"Agent-Script"}`}
+	if err := runShortcut(t, ProjectTaskAdd, args, factory, stdout); err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	got := stdout.String()
+	if !strings.Contains(got, `"Script Task"`) {
+		t.Fatalf("missing task title, stdout=%s", got)
+	}
+	if !strings.Contains(got, `"Agent-Script"`) {
+		t.Fatalf("missing extra field skill, stdout=%s", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Task: Next with --filter
+// ---------------------------------------------------------------------------
+
+func TestProjectTaskNextWithFilter(t *testing.T) {
+	factory, stdout, reg := newExecuteFactory(t)
+	registerTokenStub(reg)
+
+	// Table list
+	reg.Register(&httpmock.Stub{
+		Method: "GET",
+		URL:    "/open-apis/base/v3/bases/app_proj1/tables",
+		Body: map[string]interface{}{
+			"code": 0,
+			"data": map[string]interface{}{
+				"tables": []interface{}{
+					map[string]interface{}{"id": "tbl_tasks", "name": "_tasks"},
+				},
+				"total": 1,
+			},
+		},
+	})
+
+	// List records: 3 pending tasks, 2 with type=脚本, 1 with type=配图
+	reg.Register(&httpmock.Stub{
+		Method: "GET",
+		URL:    "/open-apis/base/v3/bases/app_proj1/tables/tbl_tasks/records",
+		Body: map[string]interface{}{
+			"code": 0,
+			"data": map[string]interface{}{
+				"data": []interface{}{
+					[]interface{}{"Task A", "pending", "high", "\u811a\u672c"},
+					[]interface{}{"Task B", "pending", "medium", "\u914d\u56fe"},
+					[]interface{}{"Task C", "pending", "low", "\u811a\u672c"},
+				},
+				"fields":         []interface{}{"title", "status", "priority", "type"},
+				"record_id_list": []interface{}{"rec_a", "rec_b", "rec_c"},
+				"has_more":       false,
+			},
+		},
+	})
+
+	// Update the claimed task (Task A, highest priority 脚本 task)
+	reg.Register(&httpmock.Stub{
+		Method: "PATCH",
+		URL:    "/open-apis/base/v3/bases/app_proj1/tables/tbl_tasks/records/rec_a",
+		Body: map[string]interface{}{
+			"code": 0,
+			"data": map[string]interface{}{
+				"record_id": "rec_a",
+				"fields":    map[string]interface{}{"title": "Task A", "status": "in_progress"},
+			},
+		},
+	})
+
+	args := []string{"+project-task-next", "--base-token", "app_proj1", "--filter", "type=\u811a\u672c"}
+	if err := runShortcut(t, ProjectTaskNext, args, factory, stdout); err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	got := stdout.String()
+	if !strings.Contains(got, `"Task A"`) {
+		t.Fatalf("should claim Task A (脚本, high priority), stdout=%s", got)
+	}
+	if strings.Contains(got, `"Task B"`) {
+		t.Fatalf("should NOT claim Task B (配图), stdout=%s", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Task: List with --filter
+// ---------------------------------------------------------------------------
+
+func TestProjectTaskListWithFilter(t *testing.T) {
+	factory, stdout, reg := newExecuteFactory(t)
+	registerTokenStub(reg)
+
+	// Table list
+	reg.Register(&httpmock.Stub{
+		Method: "GET",
+		URL:    "/open-apis/base/v3/bases/app_proj1/tables",
+		Body: map[string]interface{}{
+			"code": 0,
+			"data": map[string]interface{}{
+				"tables": []interface{}{
+					map[string]interface{}{"id": "tbl_tasks", "name": "_tasks"},
+				},
+				"total": 1,
+			},
+		},
+	})
+
+	// List records: 3 pending tasks with type field
+	reg.Register(&httpmock.Stub{
+		Method: "GET",
+		URL:    "/open-apis/base/v3/bases/app_proj1/tables/tbl_tasks/records",
+		Body: map[string]interface{}{
+			"code": 0,
+			"data": map[string]interface{}{
+				"data": []interface{}{
+					[]interface{}{"Task X", "pending", "high", "\u811a\u672c"},
+					[]interface{}{"Task Y", "pending", "medium", "\u914d\u56fe"},
+					[]interface{}{"Task Z", "pending", "low", "\u811a\u672c"},
+				},
+				"fields":         []interface{}{"title", "status", "priority", "type"},
+				"record_id_list": []interface{}{"rec_x", "rec_y", "rec_z"},
+				"has_more":       false,
+			},
+		},
+	})
+
+	args := []string{"+project-task-list", "--base-token", "app_proj1", "--status", "pending", "--filter", "type=\u811a\u672c"}
+	if err := runShortcut(t, ProjectTaskList, args, factory, stdout); err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	got := stdout.String()
+	if !strings.Contains(got, `"Task X"`) {
+		t.Fatalf("missing Task X (脚本), stdout=%s", got)
+	}
+	if !strings.Contains(got, `"Task Z"`) {
+		t.Fatalf("missing Task Z (脚本), stdout=%s", got)
+	}
+	if strings.Contains(got, `"Task Y"`) {
+		t.Fatalf("should NOT include Task Y (配图), stdout=%s", got)
+	}
+	if !strings.Contains(got, `"count": 2`) {
+		t.Fatalf("count should be 2, stdout=%s", got)
+	}
+}
