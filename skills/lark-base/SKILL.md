@@ -149,6 +149,15 @@ metadata:
 | 创建 / 更新 / 删除仪表盘 | `lark-cli base +dashboard-create` / `+dashboard-update` / `+dashboard-delete` | 一命令一动作 |
 | 列表 / 获取仪表盘 Block | `lark-cli base +dashboard-block-list` / `+dashboard-block-get` | 原子命令 |
 | 创建 / 更新 / 删除仪表盘 Block | `lark-cli base +dashboard-block-create` / `+dashboard-block-update` / `+dashboard-block-delete` | 一命令一动作 |
+| 创建项目 / 搭建工作台 | `lark-cli base +project-create` | 先读 [project guide](references/lark-base-project-guide.md) |
+| 了解项目情况 / 项目全貌 | `lark-cli base +project-get` | 返回成员、任务、KV、资源、自定义表 |
+| 存储项目信息 / 记住背景资料 | `lark-cli base +project-kv-set / +project-kv-get / +project-kv-list` | Agent 应主动将背景信息写入 KV |
+| 管理项目成员 | `lark-cli base +project-member-add / +project-member-list` | type: human / agent |
+| 关联项目资源 | `lark-cli base +project-resource-add / +project-resource-list / +project-resource-remove` | type: doc / repo / drive / wiki / chat |
+| 创建 / 分配任务 | `lark-cli base +project-task-add` | 支持 `--extra` 自定义字段 |
+| 领取任务 | `lark-cli base +project-task-next` | 支持 `--filter` 按条件领取 |
+| 更新任务状态 | `lark-cli base +project-task-update` | status: pending / in_progress / done / blocked |
+| 查看任务列表 | `lark-cli base +project-task-list` | 支持 `--status` 和 `--filter` |
 
 
 ## 操作注意事项
@@ -307,3 +316,4 @@ https://{domain}/base/{base-token}?table={table-id}&view={view-id}
 | [`workflow commands`](references/lark-base-workflow.md) | `+workflow-list / +workflow-get / +workflow-create / +workflow-update / +workflow-enable / +workflow-disable` |
 | [`dashboard commands`](references/lark-base-dashboard.md) | `+dashboard-list / +dashboard-get / +dashboard-create / +dashboard-update / +dashboard-delete` |
 | [`dashboard block commands`](references/lark-base-dashboard-block.md) | `+dashboard-block-list / +dashboard-block-get / +dashboard-block-create / +dashboard-block-update / +dashboard-block-delete` |
+| [`project 项目协作`](references/lark-base-project-guide.md) | `+project-create / +project-get / +project-kv-* / +project-member-* / +project-resource-* / +project-task-*` |
