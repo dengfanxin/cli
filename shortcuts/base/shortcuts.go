@@ -92,5 +92,6 @@ func Shortcuts() []common.Shortcut {
 		ProjectResourceList,
 		ProjectResourceRemove,
 		ProjectTaskListen,
+		ProjectTaskWait,
 	}
 }
