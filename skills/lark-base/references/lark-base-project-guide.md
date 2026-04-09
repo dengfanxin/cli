@@ -160,6 +160,40 @@ lark-cli base +project-task-list --base-token <project_id> --status pending
 lark-cli base +project-task-list --base-token <project_id> --filter "type=脚本"
 ```
 
+### 监听任务（Worker Agent）
+
+用户说"帮我盯着项目""有活就干""持续监听"时：
+
+```bash
+# 持续轮询，有匹配的 pending 任务就领取并输出
+lark-cli base +project-task-listen --base-token <project_id> --filter "type=脚本" --interval 5
+
+# 领取后自动调用 AI 执行（prompt 自动组装，含项目 KV + 任务详情）
+lark-cli base +project-task-listen --base-token <project_id> --filter "type=脚本" --exec "claude -p"
+
+# 只处理一个任务就退出
+lark-cli base +project-task-listen --base-token <project_id> --filter "type=脚本" --exec "claude -p" --once
+```
+
+`--exec` 指定的命令通过 stdin 接收自动组装的 prompt（包含任务详情 + 项目 KV 数据）。执行成功后任务自动标记 done，失败则标记 blocked。
+
+### 等待任务完成（Master Agent 调度）
+
+用户说"等它做完再继续""做完了告诉我""等脚本写好了再做配图"时：
+
+```bash
+# 阻塞等待某个任务变成 done
+lark-cli base +project-task-wait --base-token <project_id> --task-id <record_id>
+
+# 等待其他状态
+lark-cli base +project-task-wait --base-token <project_id> --task-id <record_id> --status blocked
+
+# 设置超时（默认 600 秒）
+lark-cli base +project-task-wait --base-token <project_id> --task-id <record_id> --timeout 300
+```
+
+**Master Agent 调度模式**：创建任务 → wait 等完成 → 创建下一个任务 → wait → ...以此类推。Master 掌握全局流程，Worker Agent 各自 listen 领取属于自己的任务。
+
 ## Agent 行为规范
 
 ### 创建项目时
@@ -169,28 +203,49 @@ lark-cli base +project-task-list --base-token <project_id> --filter "type=脚本
 3. 把背景信息**主动**写入 KV（用户不需要说"写 KV"）
 4. 告诉用户 project_id，提示他可以分享给团队
 
-### 作为项目成员工作时
+### 作为 Master Agent 调度时
 
-1. **先 `+project-get`** 了解项目全貌
-2. **再 `+project-kv-list`** 看看有什么已有信息
+Master Agent 负责全局流程编排，不做具体执行：
+
+1. 理解用户需求，拆解成任务序列
+2. 按顺序创建任务：`+project-task-add --extra '{"type":"脚本","agent":"小张"}'`
+3. 等待完成：`+project-task-wait --task-id <id>`
+4. 看到 done 后创建下一个任务
+5. 全部完成后汇总结果通知用户
+
+### 作为 Worker Agent 工作时
+
+Worker Agent 负责具体执行，不关心全局流程：
+
+1. **`+project-get`** 了解项目全貌
+2. **`+project-kv-list`** 看看有什么已有信息
 3. **领取任务** 时用 `--filter` 只领自己该做的
 4. **做完任务** 后：
    - 把产出写入 KV（供下游 Agent 读取）
    - 更新任务状态为 done
    - summary 里写清楚产出在哪个 KV key
+5. 或者直接用 **`+project-task-listen --exec`** 自动循环
 
-### 跨 Agent 协作模式
+### 多 Agent 协作模式
 
-Agent 之间不直接通信。协作通过两个机制：
+Agent 之间不直接通信。协作通过三个机制：
 
-- **Task**：协作协议。一个 Agent 做完任务后创建后续任务，另一个 Agent 领取继续
+- **Task**：协作协议。Master 创建任务，Worker 领取执行
 - **KV**：数据传递。上游 Agent 把产出写入 KV，下游 Agent 按 key 读取
+- **Wait**：顺序控制。Master 用 task-wait 确保上游完成后再创建下游任务
 
 示例流程：
 ```
-Agent-A 完成脚本 → kv-set key="script-1" → task-update done
-                                              ↓
-Agent-B task-next → kv-get key="script-1" → 基于脚本做配图 → kv-set key="images-1"
+Master Agent:
+  task-add "脚本" → task-wait → task-add "配图" → task-wait → task-add "合成" → ...
+
+Worker Agent (小张):                    Worker Agent (小李):
+  task-listen --filter "type=脚本"        task-listen --filter "type=合成"
+  → 领取 → 写脚本 → kv-set "script-1"     → 领取 → 读 kv "script-1" + "images-1"
+  → task-update done                       → 合成视频 → kv-set "video-raw-1"
+  → 领取 "配图" → 读 kv "script-1"          → task-update done
+  → 画配图 → kv-set "images-1"
+  → task-update done
 ```
 
 ## 命令速查
@@ -210,3 +265,5 @@ Agent-B task-next → kv-get key="script-1" → 基于脚本做配图 → kv-set
 | 领取任务 | `+project-task-next --base-token [--filter]` |
 | 更新任务 | `+project-task-update --base-token --task-id --status` |
 | 查看任务 | `+project-task-list --base-token [--status] [--filter]` |
+| 监听任务 | `+project-task-listen --base-token [--filter] [--exec]` |
+| 等待任务完成 | `+project-task-wait --base-token --task-id [--timeout]` |

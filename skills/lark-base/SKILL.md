@@ -316,4 +316,4 @@ https://{domain}/base/{base-token}?table={table-id}&view={view-id}
 | [`workflow commands`](references/lark-base-workflow.md) | `+workflow-list / +workflow-get / +workflow-create / +workflow-update / +workflow-enable / +workflow-disable` |
 | [`dashboard commands`](references/lark-base-dashboard.md) | `+dashboard-list / +dashboard-get / +dashboard-create / +dashboard-update / +dashboard-delete` |
 | [`dashboard block commands`](references/lark-base-dashboard-block.md) | `+dashboard-block-list / +dashboard-block-get / +dashboard-block-create / +dashboard-block-update / +dashboard-block-delete` |
-| [`project 项目协作`](references/lark-base-project-guide.md) | `+project-create / +project-get / +project-kv-* / +project-member-* / +project-resource-* / +project-task-*` |
+| [`project 项目协作`](references/lark-base-project-guide.md) | `+project-create / +project-get / +project-kv-* / +project-member-* / +project-resource-* / +project-task-* / +project-task-listen / +project-task-wait` |
