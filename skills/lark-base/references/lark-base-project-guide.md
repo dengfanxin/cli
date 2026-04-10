@@ -119,6 +119,33 @@ lark-cli base +project-task-add --base-token <project_id> \
 
 priority 可选值：`high`、`medium`（默认）、`low`。
 
+#### 任务描述模板
+
+Master 创建任务时，`--description` 应当包含下游 Worker 完成任务所需的**所有上下文**。尤其涉及上游产出时，要明确指出如何获取：
+
+```
+【上游依赖】
+- 上游任务 ID: recXXX  (可通过 extra.upstream_task_id 传递)
+- 需要的文件: 关键帧图片 (来自 upstream task 的 attachments)
+
+【获取上游产出】
+1. lark-cli base +project-task-get --base-token <project_id> --task-id recXXX
+2. 从返回的 attachments 数组里取 file_token
+3. lark-cli docs +media-download --token <file_token> --output ./input.png
+
+【工作要求】
+- 具体做什么（例如：用 nanobanana2 生成 4 张分镜图）
+- 产出格式（例如：PNG，1920x1080）
+- 数量/质量要求
+
+【提交产出】
+- 用 --attach 上传生成的文件到本任务
+- 用 --result 写文件含义描述（JSON 或文本）
+- 用 --status done 标记完成
+```
+
+Master 应把类似结构写入 `description` 字段，Worker Agent 读到任务后就有完整的执行说明。
+
 ### 领取任务
 
 用户说"看看有什么活""领个任务""把能做的做了"时：
@@ -166,10 +193,29 @@ lark-cli base +project-task-update --base-token <project_id> \
 
 **三个字段的职责**：
 - `summary`: 一句话总结，用于快速浏览任务列表
-- `result`: 完整产出内容（JSON 或文本），下游 Agent 用来理解任务做了什么
-- `attachments`: 实际文件（图片、视频、文档等），上传后挂在任务上
+- `result`: **文字成果** 或 **对文件成果的引用描述**（JSON 或纯文本）。如果产出是脚本、方案、API 契约等纯文字内容，直接写在这里；如果产出是文件，这里写每个文件的含义说明（对应 attachments 里的哪个 file，时间点/场景/用途等元数据）
+- `attachments`: **实际文件成果**（图片、视频、音频、设计稿、文档等），通过 `--attach` 上传后挂在任务记录上
 
 status 可选值：`pending`、`in_progress`、`done`、`blocked`。
+
+### 文件传递的铁律
+
+Agent 之间通常运行在**不同机器**上（不同进程、容器、甚至不同主机），本地文件系统不共享。因此：
+
+- **文件成果必须上传到任务的 `attachments`**：用 `--attach <本地文件路径>`，底层会把文件上传到 Base，任务记录里保存 `file_token`
+- **绝对不要**把本地文件路径写进 `result` 或 KV 里（如 `/tmp/xxx.png`、`./output/scene1.png`），下游 Agent 拿到这种路径只会看到"文件不存在"
+- **绝对不要**试图通过共享目录、scp、绕过 Base 的方式传递文件
+- **只有通过 `attachments` 传递的文件**，下游 Agent 才能通过 `file_token` 稳定下载
+
+下游 Agent 读取文件的标准流程：
+```bash
+# 1. 读任务拿到 attachments
+lark-cli base +project-task-get --base-token <project_id> --task-id <upstream_task_id>
+# 返回的 attachments[].file_token 是下载入口
+
+# 2. 用 docs +media-download 下载到本地（参数是 --token 不是 --file-token）
+lark-cli docs +media-download --token <file_token> --output ./local_file.ext
+```
 
 ### 读取任务详情
 
@@ -181,9 +227,16 @@ lark-cli base +project-task-get --base-token <project_id> --task-id <record_id>
 
 返回：`title / status / priority / summary / task_result / attachments (含 file_token 和 url) / extras（自定义字段）`。
 
-下游 Agent 拿到 attachments 后，用 `lark-cli docs +media-download --token <file_token> --output ./<filename>` 下载原文件到本地处理。
+下游 Agent 拿到 attachments 后，用以下命令下载原文件到本地：
 
-> **⚠️ 注意**：Base 附件**不能用** `lark-cli drive +download`（drive 接口对 Base 附件返回 403）。必须用 `docs +media-download`，它走 `/drive/v1/medias/{token}/download` 端点。
+```bash
+lark-cli docs +media-download --token <file_token> --output ./<filename>
+```
+
+> **⚠️ 注意事项**：
+> - Base 附件**不能用** `lark-cli drive +download`（drive 接口对 Base 附件返回 403）
+> - `docs +media-download` 的参数名是 **`--token`**，不是 `--file-token`
+> - 输出路径必须是相对路径（安全限制），如需绝对路径先 `cd` 到目标目录
 
 ### 查看任务
 
