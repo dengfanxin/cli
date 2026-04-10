@@ -51,21 +51,29 @@ func executeProjectTaskGet(runtime *common.RuntimeContext) error {
 		return err
 	}
 
-	// Parse fields from response. Base v3 uses compact format:
-	// {"data": [[val1, val2, ...]], "fields": ["f1", "f2", ...], "record_id_list": [...]}
-	// or standard format: {"fields": {...}, "record_id": "..."}
+	// Parse fields from response. Base v3 single-record response format:
+	//   {"record": {"title":"...", "status":"...", "attachments":[...], ...}}
+	// Old standard format: {"fields": {...}, "record_id": "..."}
+	// Compact format: {"data": [[...]], "fields": ["f1",...], "record_id_list": [...]}
 	result := map[string]interface{}{
 		"task_id": taskID,
 	}
 
-	// Try standard format first.
+	// Format 1: data["record"] is a flat map of fields (real Base v3 API).
+	if rec, ok := data["record"].(map[string]interface{}); ok && rec != nil {
+		populateTaskResult(result, rec)
+		runtime.Out(result, nil)
+		return nil
+	}
+
+	// Format 2: data["fields"] is a map of field name -> value.
 	if fields, ok := data["fields"].(map[string]interface{}); ok && fields != nil {
 		populateTaskResult(result, fields)
 		runtime.Out(result, nil)
 		return nil
 	}
 
-	// Compact format.
+	// Format 3: compact format with data["data"] as rows + data["fields"] as schema.
 	fieldNames := toStringSlice(data["fields"])
 	rawRows, _ := data["data"].([]interface{})
 	if len(fieldNames) > 0 && len(rawRows) > 0 {

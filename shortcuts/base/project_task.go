@@ -447,13 +447,18 @@ func executeProjectTaskUpdate(runtime *common.RuntimeContext) error {
 		}
 
 		var allAttachments []interface{}
-		// Preserve existing attachments.
-		if currentFields, ok := current["fields"].(map[string]interface{}); ok {
-			if existing, ok := currentFields[fieldTaskAttachments].([]interface{}); ok {
-				for _, item := range existing {
-					if m, ok := item.(map[string]interface{}); ok {
-						allAttachments = append(allAttachments, normalizeAttachmentForPatch(m))
-					}
+		// Preserve existing attachments. Real Base v3 API returns data["record"]
+		// as a flat map; older format had data["fields"].
+		var currentFields map[string]interface{}
+		if rec, ok := current["record"].(map[string]interface{}); ok {
+			currentFields = rec
+		} else if f, ok := current["fields"].(map[string]interface{}); ok {
+			currentFields = f
+		}
+		if existing, ok := currentFields[fieldTaskAttachments].([]interface{}); ok {
+			for _, item := range existing {
+				if m, ok := item.(map[string]interface{}); ok {
+					allAttachments = append(allAttachments, normalizeAttachmentForPatch(m))
 				}
 			}
 		}

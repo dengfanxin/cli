@@ -128,15 +128,19 @@ func getTaskStatus(runtime *common.RuntimeContext, baseToken, tasksTableID, task
 		return "", nil, err
 	}
 
-	// Response may be compact format or standard format.
-	// Try to extract fields.
-	fields, _ := data["fields"].(map[string]interface{})
-	if fields != nil {
+	// Format 1: data["record"] is a flat map (real Base v3 API).
+	if rec, ok := data["record"].(map[string]interface{}); ok && rec != nil {
+		status, _ := rec[fieldTaskStatus].(string)
+		return status, rec, nil
+	}
+
+	// Format 2: data["fields"] is a map of field -> value.
+	if fields, ok := data["fields"].(map[string]interface{}); ok && fields != nil {
 		status, _ := fields[fieldTaskStatus].(string)
 		return status, fields, nil
 	}
 
-	// Compact format: data has "data", "fields", "record_id_list".
+	// Format 3: compact format with data["data"] + data["fields"] as schema.
 	fieldNames := toStringSlice(data["fields"])
 	rawRows, _ := data["data"].([]interface{})
 	if len(fieldNames) > 0 && len(rawRows) > 0 {
