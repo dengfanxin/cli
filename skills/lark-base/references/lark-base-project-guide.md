@@ -139,13 +139,49 @@ lark-cli base +project-task-next --base-token <project_id> --filter "assignee=�
 任务做完或遇到阻塞时：
 
 ```bash
+# 只更新状态和总结
 lark-cli base +project-task-update --base-token <project_id> \
   --task-id <record_id> \
   --status done \
-  --summary "完成描述"
+  --summary "一句话总结"
+
+# 带结果数据（JSON 或纯文本，描述产出内容）
+lark-cli base +project-task-update --base-token <project_id> \
+  --task-id <record_id> \
+  --status done \
+  --summary "4个分镜脚本完成" \
+  --result '[{"time":"0-5s","画面":"...","旁白":"..."},{"time":"5-15s",...}]'
+
+# 带附件上传（多个 --attach 可以重复使用）
+lark-cli base +project-task-update --base-token <project_id> \
+  --task-id <record_id> \
+  --status done \
+  --summary "4张图生成完成" \
+  --result '[{"name":"scene1.png","desc":"0-5s 地铁场景"},{"name":"scene2.png","desc":"5-15s 戴耳机"}]' \
+  --attach ./scene1.png \
+  --attach ./scene2.png \
+  --attach ./scene3.png \
+  --attach ./scene4.png
 ```
 
+**三个字段的职责**：
+- `summary`: 一句话总结，用于快速浏览任务列表
+- `result`: 完整产出内容（JSON 或文本），下游 Agent 用来理解任务做了什么
+- `attachments`: 实际文件（图片、视频、文档等），上传后挂在任务上
+
 status 可选值：`pending`、`in_progress`、`done`、`blocked`。
+
+### 读取任务详情
+
+获取单个任务的完整信息（含 result 和 attachments）：
+
+```bash
+lark-cli base +project-task-get --base-token <project_id> --task-id <record_id>
+```
+
+返回：`title / status / priority / summary / task_result / attachments (含 file_token 和 url) / extras（自定义字段）`。
+
+下游 Agent 拿到 attachments 后，可以用 `lark-cli drive +download --file-token <token>` 下载原文件到本地处理。
 
 ### 查看任务
 
@@ -263,7 +299,8 @@ Worker Agent (小张):                    Worker Agent (小李):
 | 列出资源 | `+project-resource-list --base-token` |
 | 创建任务 | `+project-task-add --base-token --title [--extra]` |
 | 领取任务 | `+project-task-next --base-token [--filter]` |
-| 更新任务 | `+project-task-update --base-token --task-id --status` |
-| 查看任务 | `+project-task-list --base-token [--status] [--filter]` |
+| 更新任务 | `+project-task-update --base-token --task-id [--status --summary --result --attach]` |
+| 查看任务列表 | `+project-task-list --base-token [--status] [--filter]` |
+| 获取单个任务 | `+project-task-get --base-token --task-id` |
 | 监听任务 | `+project-task-listen --base-token [--filter] [--exec]` |
 | 等待任务完成 | `+project-task-wait --base-token --task-id [--timeout]` |

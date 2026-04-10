@@ -64,6 +64,8 @@ const (
 	fieldTaskUpdatedAt       = "updated_at"
 	fieldTaskSubtaskProgress = "subtask_progress"
 	fieldTaskSummary         = "summary"
+	fieldTaskResult          = "result"
+	fieldTaskAttachments     = "attachments"
 )
 
 // Field name constants for _resources.
@@ -165,13 +167,21 @@ func projectTableFields(tableName string) []map[string]interface{} {
 	tf := func(name string) map[string]interface{} {
 		return map[string]interface{}{"type": "text", "name": name}
 	}
+	af := func(name string) map[string]interface{} {
+		return map[string]interface{}{"type": "attachment", "name": name}
+	}
 	switch tableName {
 	case projectKVTable:
 		return []map[string]interface{}{tf(fieldKVKey), tf(fieldKVValue), tf(fieldKVSource), tf(fieldKVUpdatedAt)}
 	case projectMembersTable:
 		return []map[string]interface{}{tf(fieldMemberName), tf(fieldMemberRole), tf(fieldMemberType), tf(fieldMemberUserID), tf(fieldMemberJoinedAt)}
 	case projectTasksTable:
-		return []map[string]interface{}{tf(fieldTaskTitle), tf(fieldTaskDescription), tf(fieldTaskStatus), tf(fieldTaskPriority), tf(fieldTaskAssignee), tf(fieldTaskSubtasks), tf(fieldTaskSummary), tf(fieldTaskCreatedAt), tf(fieldTaskUpdatedAt)}
+		return []map[string]interface{}{
+			tf(fieldTaskTitle), tf(fieldTaskDescription), tf(fieldTaskStatus),
+			tf(fieldTaskPriority), tf(fieldTaskAssignee), tf(fieldTaskSubtasks),
+			tf(fieldTaskSummary), tf(fieldTaskResult), af(fieldTaskAttachments),
+			tf(fieldTaskCreatedAt), tf(fieldTaskUpdatedAt),
+		}
 	case projectResourcesTable:
 		return []map[string]interface{}{tf(fieldResourceName), tf(fieldResourceType), tf(fieldResourceURL), tf(fieldResourceDescription)}
 	default:

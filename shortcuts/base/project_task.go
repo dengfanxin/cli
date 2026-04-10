@@ -7,11 +7,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/larksuite/cli/shortcuts/common"
 )
+
+// thin wrappers to match the names used in executeProjectTaskUpdate.
+var osStat = os.Stat
+var filepathBase = filepath.Base
 
 // knownTaskFields lists the standard task field names used by ensureProjectTable.
 var knownTaskFields = map[string]bool{
@@ -25,6 +31,8 @@ var knownTaskFields = map[string]bool{
 	fieldTaskUpdatedAt:       true,
 	fieldTaskSubtaskProgress: true,
 	fieldTaskSummary:         true,
+	fieldTaskResult:          true,
+	fieldTaskAttachments:     true,
 }
 
 // Priority order for task sorting (lower index = higher priority).
@@ -357,15 +365,17 @@ func executeProjectTaskList(runtime *common.RuntimeContext) error {
 var ProjectTaskUpdate = common.Shortcut{
 	Service:     "base",
 	Command:     "+project-task-update",
-	Description: "Update a project task's status, summary, or subtask progress",
+	Description: "Update a project task's status, summary, result, attachments, or subtask progress",
 	Risk:        "write",
-	Scopes:      []string{"base:record:update"},
+	Scopes:      []string{"base:record:update", "docs:document.media:upload"},
 	AuthTypes:   authTypes(),
 	Flags: []common.Flag{
 		projectFlag(),
 		{Name: "task-id", Desc: "record ID of the task", Required: true},
 		{Name: "status", Desc: "new status", Enum: []string{"pending", "in_progress", "done", "blocked"}},
-		{Name: "summary", Desc: "task summary or result"},
+		{Name: "summary", Desc: "one-line summary"},
+		{Name: "result", Desc: "full task result (JSON or text); describes what was produced"},
+		{Name: "attach", Type: "string_array", Desc: "local file path to attach to the task (repeatable)"},
 		{Name: "subtask-progress", Desc: "subtask progress description"},
 	},
 	DryRun: dryRunProjectTaskUpdate,
@@ -389,9 +399,11 @@ func dryRunProjectTaskUpdate(_ context.Context, runtime *common.RuntimeContext) 
 func validateProjectTaskUpdate(runtime *common.RuntimeContext) error {
 	status := strings.TrimSpace(runtime.Str("status"))
 	summary := strings.TrimSpace(runtime.Str("summary"))
+	result := strings.TrimSpace(runtime.Str("result"))
 	subtaskProgress := strings.TrimSpace(runtime.Str("subtask-progress"))
-	if status == "" && summary == "" && subtaskProgress == "" {
-		return common.FlagErrorf("at least one of --status, --summary, or --subtask-progress is required")
+	attachFiles := runtime.StrArray("attach")
+	if status == "" && summary == "" && result == "" && subtaskProgress == "" && len(attachFiles) == 0 {
+		return common.FlagErrorf("at least one of --status, --summary, --result, --attach, or --subtask-progress is required")
 	}
 	return nil
 }
@@ -401,7 +413,9 @@ func executeProjectTaskUpdate(runtime *common.RuntimeContext) error {
 	taskID := strings.TrimSpace(runtime.Str("task-id"))
 	status := strings.TrimSpace(runtime.Str("status"))
 	summary := strings.TrimSpace(runtime.Str("summary"))
+	result := strings.TrimSpace(runtime.Str("result"))
 	subtaskProgress := strings.TrimSpace(runtime.Str("subtask-progress"))
+	attachFiles := runtime.StrArray("attach")
 
 	tasksTableID, err := findProjectTableID(runtime, baseToken, projectTasksTable)
 	if err != nil {
@@ -417,8 +431,52 @@ func executeProjectTaskUpdate(runtime *common.RuntimeContext) error {
 	if summary != "" {
 		fields[fieldTaskSummary] = summary
 	}
+	if result != "" {
+		fields[fieldTaskResult] = result
+	}
 	if subtaskProgress != "" {
 		fields[fieldTaskSubtaskProgress] = subtaskProgress
+	}
+
+	// If --attach files provided, upload each to Base and merge into attachments field.
+	if len(attachFiles) > 0 {
+		// Read current record to preserve existing attachments.
+		current, err := fetchBaseRecord(runtime, baseToken, tasksTableID, taskID)
+		if err != nil {
+			return fmt.Errorf("read task %s: %w", taskID, err)
+		}
+
+		var allAttachments []interface{}
+		// Preserve existing attachments.
+		if currentFields, ok := current["fields"].(map[string]interface{}); ok {
+			if existing, ok := currentFields[fieldTaskAttachments].([]interface{}); ok {
+				for _, item := range existing {
+					if m, ok := item.(map[string]interface{}); ok {
+						allAttachments = append(allAttachments, normalizeAttachmentForPatch(m))
+					}
+				}
+			}
+		}
+
+		// Upload each new file.
+		for _, filePath := range attachFiles {
+			filePath = strings.TrimSpace(filePath)
+			if filePath == "" {
+				continue
+			}
+			info, err := osStat(filePath)
+			if err != nil {
+				return fmt.Errorf("file not found: %s", filePath)
+			}
+			fileName := filepathBase(filePath)
+			attachment, err := uploadAttachmentToBase(runtime, filePath, fileName, baseToken, info.Size())
+			if err != nil {
+				return fmt.Errorf("upload %s: %w", filePath, err)
+			}
+			allAttachments = append(allAttachments, attachment)
+		}
+
+		fields[fieldTaskAttachments] = allAttachments
 	}
 
 	data, err := baseV3Call(runtime, "PATCH", baseV3Path("bases", baseToken, "tables", tasksTableID, "records", taskID), nil, fields)
