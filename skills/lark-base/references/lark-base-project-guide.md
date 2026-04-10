@@ -181,7 +181,9 @@ lark-cli base +project-task-get --base-token <project_id> --task-id <record_id>
 
 返回：`title / status / priority / summary / task_result / attachments (含 file_token 和 url) / extras（自定义字段）`。
 
-下游 Agent 拿到 attachments 后，可以用 `lark-cli drive +download --file-token <token>` 下载原文件到本地处理。
+下游 Agent 拿到 attachments 后，用 `lark-cli docs +media-download --token <file_token> --output ./<filename>` 下载原文件到本地处理。
+
+> **⚠️ 注意**：Base 附件**不能用** `lark-cli drive +download`（drive 接口对 Base 附件返回 403）。必须用 `docs +media-download`，它走 `/drive/v1/medias/{token}/download` 端点。
 
 ### 查看任务
 
