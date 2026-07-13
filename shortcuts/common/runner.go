@@ -222,6 +222,19 @@ func (ctx *RuntimeContext) DoAPI(req *larkcore.ApiReq, opts ...larkcore.RequestO
 	if optFn := cmdutil.ShortcutHeaderOpts(ctx.ctx); optFn != nil {
 		opts = append(opts, optFn)
 	}
+	mergedHeaders := make(http.Header)
+	for _, optFn := range opts {
+		option := &larkcore.RequestOption{}
+		optFn(option)
+		for key, values := range option.Header {
+			for _, value := range values {
+				mergedHeaders.Add(key, value)
+			}
+		}
+	}
+	if len(mergedHeaders) > 0 {
+		opts = append(opts, larkcore.WithHeaders(mergedHeaders))
+	}
 	return ac.DoSDKRequest(ctx.ctx, req, ctx.As(), opts...)
 }
 

@@ -16,14 +16,8 @@ var BaseTableDelete = common.Shortcut{
 	Risk:        "high-risk-write",
 	Scopes:      []string{"base:table:delete"},
 	AuthTypes:   authTypes(),
-	Flags:       appendDeleteApprovalFlags(baseTokenFlag(true), tableRefFlag(true)),
-	Tips: []string{
-		`Example: lark-cli base +table-delete --base-token <base_token> --table-id "Old Tasks" --yes`,
-		"table-id accepts a table ID (tbl...) or the table name in the current Base.",
-		baseHighRiskYesTip,
-		"Use --prepare-approval to create the approval URL, or pass --auth-code to execute the delete.",
-	},
-	DryRun: dryRunTableDelete,
+	Flags:       append([]common.Flag{baseTokenFlag(true), tableRefFlag(true)}, deleteApprovalFlags()...),
+	DryRun:      dryRunTableDelete,
 	Execute: func(ctx context.Context, runtime *common.RuntimeContext) error {
 		return executeTableDelete(runtime)
 	},

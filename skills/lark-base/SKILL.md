@@ -109,7 +109,7 @@ metadata:
 9. **统一参数名** — 一律使用 `--base-token`，不使用旧 `--app-token`
 10. **遇到“公式 / 查找引用 / 派生指标 / 跨表计算”需求，优先走字段方案判断** — 先判断应建 formula / lookup 字段，还是只做一次性 `+data-query`
 11. **公式、lookup、系统字段默认视为只读** — 除 `+field-create / +field-update` 维护字段定义外，不要把这些字段作为记录写入目标
-12. **改名和删除按明确意图执行** — `+view-rename` 在目标视图和新名称都明确时可直接执行；`+record-delete / +field-delete / +table-delete` 在用户已经明确要求删除且目标明确时也可直接执行，不需要再补一次确认，并且执行删除命令时要主动补上 `--yes`；只有目标不明确时才继续追问
+12. **删除必须使用一次性授权码** — Base 删除命令先带 `--prepare-approval` 创建审批请求并把 `approval_url / request_id` 交给用户；用户从可信页面取得授权码后，再用同一删除命令带 `--auth-code` 和 `--yes` 执行。CLI 先调用 `ValidateDeleteAuthCode`，校验成功后继续调用协议不变的原删除 OpenAPI，不缓存授权状态
 
 ## 问卷 / 表单提示
 
@@ -174,7 +174,7 @@ metadata:
 - **data-query 使用方式**：使用 `+data-query` 前必须先阅读 [lark-base-data-query.md](references/lark-base-data-query.md) 了解 DSL 结构、支持的字段类型、聚合函数和限制条件；DSL 中的 `field_name` 必须与表字段名精确匹配，构造前先用 `+field-list` 获取真实字段名
 - **公式 / lookup 使用方式**：构造表达式或 where 条件前，至少先拿当前表结构；跨表时要查找目标表的结构，不允许凭自然语言猜字段名
 - **视图重命名确认规则**：用户已经明确“把哪个视图改成什么名字”时，`+view-rename` 直接执行即可，不需要再补一句确认
-- **删除确认规则（记录 / 字段 / 表）**：如果用户已经明确说要删除，并且目标也明确，`+record-delete / +field-delete / +table-delete` 可直接执行，不需要再补一次确认；执行时直接带 `--yes` 通过 CLI 的高风险写入校验。只有目标仍有歧义时，再先用 `+record-get / +field-get / +table-get` 或 list 命令确认
+- **删除授权规则（记录 / 字段 / 表 / 视图 / 表单）**：先用目标删除命令加 `--prepare-approval` 获取审批链接；拿到用户回填的 `--auth-code` 后，同一命令先调用 `ValidateDeleteAuthCode`，通过后再发起一次协议不变的真实 DELETE。目标有歧义时仍先用 get/list 命令确认
 
 ## Wiki 链接特殊处理（特别关键！）
 

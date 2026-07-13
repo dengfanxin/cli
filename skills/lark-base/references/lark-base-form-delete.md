@@ -11,7 +11,8 @@
 lark-cli base +form-delete \
   --base-token <base_token> \
   --table-id <table_id> \
-  --form-id <form_id>
+  --form-id <form_id> \
+  --auth-code larkauth_v1_xxx
 
 # 预览（不实际执行）
 lark-cli base +form-delete \
@@ -28,6 +29,8 @@ lark-cli base +form-delete \
 | `--base-token <token>` | 是 | 多维表格 App token（base_token） |
 | `--table-id <id>` | 是 | 数据表 ID |
 | `--form-id <id>` | 是 | 要删除的表单 ID |
+| `--prepare-approval` | 否 | 只创建审批请求并返回 approval_url / request_id |
+| `--auth-code <code>` | 执行删除时是 | 用户从可信审批页获取的一次性授权码 |
 | `--as` | 否 | 身份：user（默认）\| bot |
 | `--dry-run` | 否 | 预览 API 调用，不执行 |
 

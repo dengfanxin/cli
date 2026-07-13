@@ -4,17 +4,13 @@
 package base
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"net/url"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
-
-	larkcore "github.com/larksuite/oapi-sdk-go/v3/core"
 
 	"github.com/larksuite/cli/shortcuts/common"
 )
@@ -363,49 +359,6 @@ func baseV3Path(parts ...string) string {
 		}
 	}
 	return baseV3ServicePath + "/" + strings.Join(clean, "/")
-}
-
-func baseV3Raw(runtime *common.RuntimeContext, method, path string, params map[string]interface{}, data interface{}) (map[string]interface{}, error) {
-	queryParams := make(larkcore.QueryParams)
-	for k, v := range params {
-		queryParams.Set(k, fmt.Sprintf("%v", v))
-	}
-	req := &larkcore.ApiReq{
-		HttpMethod:  strings.ToUpper(method),
-		ApiPath:     path,
-		Body:        data,
-		QueryParams: queryParams,
-	}
-	h := make(http.Header)
-	h.Set("X-App-Id", runtime.Config.AppID)
-	resp, err := runtime.DoAPI(req, larkcore.WithHeaders(h))
-	if err != nil {
-		return nil, err
-	}
-	if resp.StatusCode >= http.StatusBadRequest {
-		body := strings.TrimSpace(string(resp.RawBody))
-		if body == "" {
-			return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
-		}
-		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, body)
-	}
-	var result map[string]interface{}
-	dec := json.NewDecoder(bytes.NewReader(resp.RawBody))
-	dec.UseNumber()
-	if err := dec.Decode(&result); err != nil {
-		return nil, fmt.Errorf("response parse error: %w", err)
-	}
-	return result, nil
-}
-
-func baseV3Call(runtime *common.RuntimeContext, method, path string, params map[string]interface{}, data interface{}) (map[string]interface{}, error) {
-	result, err := baseV3Raw(runtime, method, path, params, data)
-	return handleBaseAPIResult(result, err, "API call failed")
-}
-
-func baseV3CallAny(runtime *common.RuntimeContext, method, path string, params map[string]interface{}, data interface{}) (interface{}, error) {
-	result, err := baseV3Raw(runtime, method, path, params, data)
-	return handleBaseAPIResultAny(result, err, "API call failed")
 }
 
 func toInt(v interface{}) int {

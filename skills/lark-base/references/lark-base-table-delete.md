@@ -10,6 +10,7 @@
 lark-cli base +table-delete \
   --base-token app_xxx \
   --table-id tbl_xxx \
+  --auth-code larkauth_v1_xxx \
   --yes
 ```
 
@@ -19,6 +20,8 @@ lark-cli base +table-delete \
 |------|------|------|
 | `--base-token <token>` | 是 | Base Token |
 | `--table-id <id_or_name>` | 是 | 表 ID 或表名 |
+| `--prepare-approval` | 否 | 只创建审批请求并返回 approval_url / request_id |
+| `--auth-code <code>` | 执行删除时是 | 用户从可信审批页获取的一次性授权码 |
 
 ## API 入参详情
 
@@ -36,8 +39,8 @@ DELETE /open-apis/base/v3/bases/:base_token/tables/:table_id
 
 > 这是**高风险写入操作**。CLI 层要求显式传 `--yes`；如果用户已经明确要求删除且目标明确，直接执行并带上 `--yes`，不要再补一次确认。
 
-1. 建议先用 `+table-list` 或 `+table-get` 确认目标。
-2. 只有当目标表仍不明确时，才继续追问；如果删除意图和目标都明确，直接执行。
+1. 先用同一命令加 `--prepare-approval` 创建审批请求并把链接交给用户。
+2. 用户回填授权码后，带 `--auth-code` 和 `--yes` 执行一次真实 DELETE。
 
 ## 坑点
 

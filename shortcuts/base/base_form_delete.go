@@ -17,16 +17,11 @@ var BaseFormDelete = common.Shortcut{
 	Scopes:      []string{"base:form:delete"},
 	AuthTypes:   []string{"user", "bot"},
 	HasFormat:   true,
-	Flags: appendDeleteApprovalFlags(
-		baseTokenFlag(true),
-		common.Flag{Name: "table-id", Desc: "table ID", Required: true},
-		common.Flag{Name: "form-id", Desc: "form ID", Required: true},
-	),
-	Tips: []string{
-		"Use +form-list or +form-get first when the form target is ambiguous.",
-		baseHighRiskYesTip,
-		"Use --prepare-approval to create the approval URL, or pass --auth-code to execute the delete.",
-	},
+	Flags: append([]common.Flag{
+		{Name: "base-token", Desc: "Base app token (base_token)", Required: true},
+		{Name: "table-id", Desc: "table ID", Required: true},
+		{Name: "form-id", Desc: "form ID", Required: true},
+	}, deleteApprovalFlags()...),
 	DryRun: func(ctx context.Context, runtime *common.RuntimeContext) *common.DryRunAPI {
 		return common.NewDryRunAPI().
 			DELETE("/open-apis/base/v3/bases/:base_token/tables/:table_id/forms/:form_id").
@@ -39,20 +34,14 @@ var BaseFormDelete = common.Shortcut{
 		tableId := runtime.Str("table-id")
 		formId := runtime.Str("form-id")
 		stop, err := handleDeleteApproval(runtime, deleteApprovalSpec{
-			Action:       "form_delete",
-			BaseToken:    baseToken,
-			ResourceType: "form",
-			ResourceID:   formId,
+			Action: "base.form.delete", BaseToken: baseToken, ResourceType: "form", ResourceID: tableId + ":" + formId,
 		})
-		if err != nil {
+		if err != nil || stop {
 			return err
 		}
-		if stop {
-			return nil
-		}
 
-		_, err = baseV3Call(runtime, "DELETE",
-			baseV3Path("bases", baseToken, "tables", tableId, "forms", formId), nil, nil)
+		_, err = baseV3Delete(runtime,
+			baseV3Path("bases", baseToken, "tables", tableId, "forms", formId))
 		if err != nil {
 			return err
 		}

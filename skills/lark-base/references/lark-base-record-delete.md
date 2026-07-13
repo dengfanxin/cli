@@ -11,6 +11,7 @@ lark-cli base +record-delete \
   --base-token app_xxx \
   --table-id tbl_xxx \
   --record-id rec_xxx \
+  --auth-code larkauth_v1_xxx \
   --yes
 ```
 
@@ -21,6 +22,8 @@ lark-cli base +record-delete \
 | `--base-token <token>` | 是 | Base Token |
 | `--table-id <id_or_name>` | 是 | 表 ID 或表名 |
 | `--record-id <id>` | 是 | 记录 ID |
+| `--prepare-approval` | 否 | 只创建审批请求并返回 approval_url / request_id |
+| `--auth-code <code>` | 执行删除时是 | 用户从可信审批页获取的一次性授权码 |
 
 ## API 入参详情
 

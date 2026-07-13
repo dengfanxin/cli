@@ -16,13 +16,8 @@ var BaseFieldDelete = common.Shortcut{
 	Risk:        "high-risk-write",
 	Scopes:      []string{"base:field:delete"},
 	AuthTypes:   authTypes(),
-	Flags:       appendDeleteApprovalFlags(baseTokenFlag(true), tableRefFlag(true), fieldRefFlag(true)),
-	Tips: []string{
-		baseHighRiskYesTip,
-		`Example: lark-cli base +field-delete --base-token <base_token> --table-id <table_id> --field-id "Status" --yes`,
-		"Use --prepare-approval to create the approval URL, or pass --auth-code to execute the delete.",
-	},
-	DryRun: dryRunFieldDelete,
+	Flags:       append([]common.Flag{baseTokenFlag(true), tableRefFlag(true), fieldRefFlag(true)}, deleteApprovalFlags()...),
+	DryRun:      dryRunFieldDelete,
 	Execute: func(ctx context.Context, runtime *common.RuntimeContext) error {
 		return executeFieldDelete(runtime)
 	},

@@ -16,13 +16,8 @@ var BaseViewDelete = common.Shortcut{
 	Risk:        "high-risk-write",
 	Scopes:      []string{"base:view:write_only"},
 	AuthTypes:   authTypes(),
-	Flags:       appendDeleteApprovalFlags(baseTokenFlag(true), tableRefFlag(true), viewRefFlag(true)),
-	Tips: []string{
-		baseHighRiskYesTip,
-		`Example: lark-cli base +view-delete --base-token <base_token> --table-id <table_id> --view-id "Old View" --yes`,
-		"Use --prepare-approval to create the approval URL, or pass --auth-code to execute the delete.",
-	},
-	DryRun: dryRunViewDelete,
+	Flags:       append([]common.Flag{baseTokenFlag(true), tableRefFlag(true), viewRefFlag(true)}, deleteApprovalFlags()...),
+	DryRun:      dryRunViewDelete,
 	Execute: func(ctx context.Context, runtime *common.RuntimeContext) error {
 		return executeViewDelete(runtime)
 	},
